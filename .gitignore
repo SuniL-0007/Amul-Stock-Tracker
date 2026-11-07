@@ -10,3 +10,9 @@ state-branch/
 # Local-only docs
 README.md
 REQUIREMENTS.md
+
+# Local secrets
+*[Tt]oken*.txt
+*[Ss]ecret*
+*.key
+.env*

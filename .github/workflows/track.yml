@@ -2,7 +2,8 @@ name: track
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # Off-peak minutes: GitHub delays or drops many runs scheduled at :00/:15/:30/:45.
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 permissions:

@@ -1,0 +1,69 @@
+name: track
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write # push state.json to the `state` branch
+  actions: write # keep-alive: re-enable this workflow
+
+concurrency:
+  group: track
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps --only-shell chromium
+
+      - name: Load state branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin state >/dev/null; then
+            git fetch --depth=1 origin state
+            git worktree add state-branch origin/state
+          else
+            git worktree add --orphan -b state state-branch
+          fi
+
+      - name: Check stock
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PINCODE_HOME: ${{ secrets.PINCODE_HOME }}
+          PINCODE_AWAY: ${{ secrets.PINCODE_AWAY }}
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+          STATE_PATH: state-branch/state.enc
+        run: python -m tracker.main
+
+      - name: Save state (only if changed)
+        if: always()
+        run: |
+          cd state-branch
+          [ -f state.enc ] || exit 0
+          git add state.enc
+          if ! git diff --cached --quiet; then
+            git commit -m "Update tracker state"
+            git push origin HEAD:refs/heads/state
+          fi
+
+      - name: Keep schedule alive
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/track.yml/enable"

@@ -1,0 +1,5 @@
+{
+  "locations": ["home", "away"],
+  "default_location": "home",
+  "allowlist": []
+}

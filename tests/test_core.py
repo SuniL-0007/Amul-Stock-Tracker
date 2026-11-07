@@ -146,14 +146,28 @@ def test_switch_during_failure_explains_and_snapshot_waits():
     assert "Now tracking" in out[0].text and not state["pending_snapshot"]
 
 
-@pytest.mark.parametrize("now,expected", [(WEEKDAY, 0), (SUNDAY_EARLY, 0), (SUNDAY_LATE, 1)])
-def test_heartbeat_only_sunday_morning(now, expected):
-    state = settled([p("whey", True)])
-    _, out = run_cycle(state, CFG, [], fetcher({"111111": [p("whey", True)]}), now)
-    assert sum("alive" in m.text for m in out) == expected
+@pytest.mark.parametrize(
+    "now,expected",
+    [(WEEKDAY, 0), (SUNDAY_EARLY, 0), (SUNDAY_LATE, 1)],
+    ids=["same-day-as-snapshot", "next-day-before-9am", "next-day-after-9am"],
+)
+def test_daily_summary_after_9am_once_per_day(now, expected):
+    state = settled([p("whey", True), p("lassi", False)])  # first-run snapshot covers that day
+    _, out = run_cycle(state, CFG, [], fetcher({"111111": [p("whey", True), p("lassi", False)]}), now)
+    summaries = [m for m in out if "Daily summary" in m.text]
+    assert len(summaries) == expected
+    if summaries:
+        assert summaries[0].silent and "1/2 in stock" in summaries[0].text and "Whey" in summaries[0].text
 
 
-def test_heartbeat_once_per_sunday():
+def test_snapshot_before_9am_still_gets_summary_later_that_day():
+    early = datetime(2026, 11, 4, 7, tzinfo=IST)
+    state, _ = run_cycle(None, CFG, [], fetcher({"111111": [p("whey", True)]}), early)
+    _, out = run_cycle(state, CFG, [], fetcher({"111111": [p("whey", True)]}), WEEKDAY)
+    assert ["Daily summary" in m.text for m in out] == [True]
+
+
+def test_summary_once_per_day():
     state = settled([p("whey", True)])
     state, _ = run_cycle(state, CFG, [], fetcher({"111111": [p("whey", True)]}), SUNDAY_LATE)
     _, out = run_cycle(state, CFG, [], fetcher({"111111": [p("whey", True)]}), SUNDAY_LATE)

@@ -16,8 +16,7 @@ from .models import Product, ScrapeError
 
 IST = timezone(timedelta(hours=5, minutes=30))
 FAILURE_ALERT_THRESHOLD = 3
-HEARTBEAT_WEEKDAY = 6  # Sunday
-HEARTBEAT_HOUR = 9  # IST, "Sunday morning"
+SUMMARY_HOUR = 9  # IST; daily summary goes out on the first successful check after this
 
 
 @dataclass(frozen=True)
@@ -173,24 +172,19 @@ def run_cycle(
 
     loc_state["stock"] = {p.alias: p.available for p in products}
 
+    local = now.astimezone(IST)
+    today = local.date().isoformat()
+
     if state.get("pending_snapshot"):
         out.append(Message(_snapshot(location, products, config, "👀 Now tracking"), silent=True))
         state["pending_snapshot"] = False
+        if local.hour >= SUMMARY_HOUR:
+            state["last_heartbeat"] = today  # the snapshot already covers today's summary
     elif status_requested:
         out.append(Message(_snapshot(location, products, config, "ℹ️ Checked just now"), silent=True))
 
-    local = now.astimezone(IST)
-    today = local.date().isoformat()
-    if (
-        local.weekday() == HEARTBEAT_WEEKDAY
-        and local.hour >= HEARTBEAT_HOUR
-        and state.get("last_heartbeat") != today
-    ):
-        watched = [p for p in products if config.watched(p)]
-        count = sum(p.available for p in watched)
-        out.append(
-            Message(f"💓 Tracker alive · {_title(location)} · {count}/{len(watched)} in stock", silent=True)
-        )
+    if local.hour >= SUMMARY_HOUR and state.get("last_heartbeat") != today:
+        out.append(Message(_snapshot(location, products, config, "☀️ Daily summary"), silent=True))
         state["last_heartbeat"] = today
 
     return state, out

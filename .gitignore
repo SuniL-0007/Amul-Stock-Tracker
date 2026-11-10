@@ -8,7 +8,7 @@ state-branch/
 .env
 
 # Local-only docs
-README.md
+IMPLEMENTATION.md
 REQUIREMENTS.md
 
 # Local secrets

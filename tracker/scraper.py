@@ -15,11 +15,13 @@ USER_AGENT = (
 
 
 def parse_products(body: dict) -> list[Product]:
-    data = body.get("data")
+    data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, list):
         raise ScrapeError("products response has no data list")
     products = []
     for item in data:
+        if not isinstance(item, dict):
+            continue
         alias = item.get("alias")
         if not alias:
             continue
@@ -75,6 +77,8 @@ def fetch_products(pincode: str, timeout_s: int = 60) -> list[Product]:
                 browser.close()
     except PlaywrightError as e:
         raise ScrapeError(f"browser error: {e.message.splitlines()[0]}") from e
+    except Exception as e:  # anything else is still a failed check, not a crashed run
+        raise ScrapeError(f"unexpected error: {type(e).__name__}") from e
 
     if not pin_set:
         raise ScrapeError("pincode was not accepted by the site")
